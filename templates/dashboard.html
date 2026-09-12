@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Suivi Famille</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #e2e8f0; }
+  #layout { display: flex; height: 100vh; }
+  #sidebar { width: 300px; flex-shrink: 0; background: #1e293b; padding: 1rem; overflow-y: auto; }
+  #map { flex: 1; }
+  h1 { font-size: 1.1rem; margin: 0 0 1rem; display: flex; justify-content: space-between; align-items: center; }
+  h1 a { font-size: .75rem; color: #94a3b8; text-decoration: none; }
+  h2 { font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; margin: 1.2rem 0 .5rem; }
+  select, input, button { width: 100%; padding: .5rem; margin-bottom: .5rem; border-radius: 6px;
+         border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: .9rem; box-sizing: border-box; }
+  button { background: #2563eb; border: none; font-weight: 600; cursor: pointer; }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #334155; }
+  button.secondary:hover { background: #475569; }
+  button.danger { background: #b91c1c; }
+  .device-row { display: flex; gap: .4rem; align-items: center; margin-bottom: .4rem; }
+  .device-row span { flex: 1; font-size: .9rem; }
+  .device-row button { width: auto; padding: .3rem .5rem; margin: 0; font-size: .75rem; }
+  .row2 { display: flex; gap: .5rem; }
+  .row2 > * { flex: 1; }
+  label { font-size: .8rem; color: #94a3b8; }
+  #status { font-size: .8rem; color: #94a3b8; margin-top: .5rem; }
+  .key-box { background: #0f172a; border: 1px dashed #475569; padding: .5rem; border-radius: 6px;
+             font-family: monospace; font-size: .75rem; word-break: break-all; margin-top: .3rem; }
+</style>
+</head>
+<body>
+<div id="layout">
+  <div id="sidebar">
+    <h1>Suivi Famille <a href="/logout">déconnexion</a></h1>
+
+    <h2>Personne suivie</h2>
+    <select id="deviceSelect"></select>
+    <label><input type="checkbox" id="liveToggle" style="width:auto" checked> Suivi en direct (30s)</label>
+
+    <h2>Historique</h2>
+    <label>Du</label>
+    <input type="datetime-local" id="startInput">
+    <label>Au</label>
+    <input type="datetime-local" id="endInput">
+    <button id="loadHistoryBtn">Afficher l'historique</button>
+    <button class="secondary" id="clearHistoryBtn">Effacer le tracé</button>
+
+    <h2>Ajouter une personne</h2>
+    <input type="text" id="newDeviceName" placeholder="Ex: Téléphone de Léa">
+    <button id="addDeviceBtn">Créer</button>
+    <div id="newKeyBox"></div>
+
+    <h2>Personnes suivies</h2>
+    <div id="devicesList"></div>
+
+    <div id="status"></div>
+  </div>
+  <div id="map"></div>
+</div>
+
+<script>
+const map = L.map('map').setView([46.6, 2.3], 5);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors', maxZoom: 19
+}).addTo(map);
+
+let marker = null;
+let polyline = null;
+let liveTimer = null;
+let currentDeviceId = null;
+let lastSeen = null;
+
+function setStatus(msg) {
+  document.getElementById('status').textContent = msg;
+}
+
+async function loadDevices(selectId) {
+  const res = await fetch('/api/devices');
+  const devices = await res.json();
+
+  const select = document.getElementById('deviceSelect');
+  select.innerHTML = '';
+  devices.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.id;
+    opt.textContent = d.name;
+    select.appendChild(opt);
+  });
+  if (selectId) select.value = selectId;
+
+  const list = document.getElementById('devicesList');
+  list.innerHTML = '';
+  devices.forEach(d => {
+    const row = document.createElement('div');
+    row.className = 'device-row';
+    row.innerHTML = `<span>${d.name}</span>
+      <button class="secondary" data-action="key" data-id="${d.id}">Clé</button>
+      <button class="danger" data-action="del" data-id="${d.id}">Suppr.</button>`;
+    list.appendChild(row);
+  });
+
+  return devices;
+}
+
+document.getElementById('devicesList').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  if (btn.dataset.action === 'del') {
+    if (!confirm('Supprimer cette personne et tout son historique ?')) return;
+    await fetch(`/api/devices/${id}`, { method: 'DELETE' });
+    await loadDevices();
+    if (String(currentDeviceId) === id) { currentDeviceId = null; clearMap(); }
+  } else if (btn.dataset.action === 'key') {
+    const res = await fetch(`/api/devices/${id}/key`);
+    const data = await res.json();
+    alert('Clé API (à mettre dans le script du téléphone suivi) :\n\n' + data.api_key);
+  }
+});
+
+document.getElementById('addDeviceBtn').addEventListener('click', async () => {
+  const nameInput = document.getElementById('newDeviceName');
+  const name = nameInput.value.trim();
+  if (!name) return;
+  const res = await fetch('/api/devices', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ name })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    document.getElementById('newKeyBox').innerHTML =
+      `<div class="key-box"><b>Clé API pour ${data.name}</b><br>${data.api_key}</div>`;
+    nameInput.value = '';
+    const devices = await loadDevices();
+    const created = devices.find(d => d.name === data.name);
+    if (created) selectDevice(created.id);
+  } else {
+    alert(data.error || 'Erreur');
+  }
+});
+
+function clearMap() {
+  if (marker) { map.removeLayer(marker); marker = null; }
+  if (polyline) { map.removeLayer(polyline); polyline = null; }
+  lastSeen = null;
+}
+
+async function selectDevice(id) {
+  currentDeviceId = id;
+  document.getElementById('deviceSelect').value = id;
+  clearMap();
+  await refreshLive();
+}
+
+document.getElementById('deviceSelect').addEventListener('change', (e) => {
+  selectDevice(e.target.value);
+});
+
+document.getElementById('clearHistoryBtn').addEventListener('click', () => {
+  if (polyline) { map.removeLayer(polyline); polyline = null; }
+});
+
+document.getElementById('loadHistoryBtn').addEventListener('click', async () => {
+  if (!currentDeviceId) return;
+  const start = document.getElementById('startInput').value;
+  const end = document.getElementById('endInput').value;
+  const params = new URLSearchParams();
+  if (start) params.set('start', new Date(start).toISOString());
+  if (end) params.set('end', new Date(end).toISOString());
+
+  const res = await fetch(`/api/positions/${currentDeviceId}/history?` + params.toString());
+  const points = await res.json();
+  if (polyline) map.removeLayer(polyline);
+  if (points.length === 0) { setStatus('Aucun point sur cette période.'); return; }
+
+  const latlngs = points.map(p => [p.lat, p.lon]);
+  polyline = L.polyline(latlngs, { color: '#38bdf8', weight: 3 }).addTo(map);
+  map.fitBounds(polyline.getBounds(), { maxZoom: 15 });
+  setStatus(`${points.length} points affichés (${new Date(points[0].recorded_at).toLocaleString()} → ${new Date(points[points.length-1].recorded_at).toLocaleString()})`);
+});
+
+async function refreshLive() {
+  if (!currentDeviceId) return;
+  const res = await fetch(`/api/positions/${currentDeviceId}/latest`);
+  const pos = await res.json();
+  if (!pos || !pos.lat) { setStatus('Aucune position reçue pour le moment.'); return; }
+  if (pos.recorded_at === lastSeen) return;
+  lastSeen = pos.recorded_at;
+
+  const latlng = [pos.lat, pos.lon];
+  if (!marker) {
+    marker = L.marker(latlng).addTo(map);
+    map.setView(latlng, 15);
+  } else {
+    marker.setLatLng(latlng);
+  }
+  const batteryTxt = (pos.battery !== null && pos.battery !== undefined) ? `🔋 ${pos.battery}%` : '';
+  marker.bindPopup(`Dernière position<br>${new Date(pos.recorded_at).toLocaleString()}<br>${batteryTxt}`);
+  setStatus(`Dernière mise à jour : ${new Date(pos.recorded_at).toLocaleString()}`);
+}
+
+document.getElementById('liveToggle').addEventListener('change', (e) => {
+  if (liveTimer) clearInterval(liveTimer);
+  if (e.target.checked) {
+    liveTimer = setInterval(refreshLive, 30000);
+  }
+});
+
+(async function init() {
+  const devices = await loadDevices();
+  if (devices.length > 0) {
+    await selectDevice(devices[0].id);
+  }
+  liveTimer = setInterval(refreshLive, 30000);
+})();
+</script>
+</body>
+</html>
