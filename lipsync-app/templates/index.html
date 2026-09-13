@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Lip Sync — photo + voix</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main>
+    <h1>Lip Sync</h1>
+    <p class="subtitle">Anime une photo à partir d'un enregistrement audio (SadTalker).</p>
+
+    <div class="notice">
+      ⚠️ N'utilise ceci qu'avec ta propre photo/voix, ou avec le consentement
+      explicite de la personne concernée. Cette technologie peut produire des
+      vidéos trompeuses (« deepfake ») — indique toujours qu'une vidéo est
+      synthétique si tu la partages.
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <ul class="flash">
+          {% for m in messages %}<li>{{ m }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <form action="{{ url_for('generate_video') }}" method="post" enctype="multipart/form-data">
+      <label>
+        Photo (portrait, visage bien visible)
+        <input type="file" name="image" accept="image/png,image/jpeg,image/webp" required>
+      </label>
+
+      <label>
+        Fichier audio (ta voix)
+        <input type="file" name="audio" accept="audio/wav,audio/mpeg,audio/mp4,audio/ogg" required>
+      </label>
+
+      <label class="checkbox">
+        <input type="checkbox" name="still" checked>
+        Garder la tête immobile (recommandé pour un rendu naturel)
+      </label>
+
+      <label>
+        Amélioration du visage
+        <select name="enhancer">
+          <option value="gfpgan" selected>GFPGAN (plus net, plus lent)</option>
+          <option value="">Aucune (plus rapide)</option>
+        </select>
+      </label>
+
+      <button type="submit">Générer la vidéo</button>
+    </form>
+
+    <p class="hint">
+      Le traitement peut prendre plusieurs minutes sur CPU. Voir le README pour
+      l'installation des modèles avant la première utilisation.
+    </p>
+  </main>
+</body>
+</html>
