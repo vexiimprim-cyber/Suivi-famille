@@ -1,0 +1,9 @@
+vendor/
+uploads/*
+results/*
+!uploads/.gitkeep
+!results/.gitkeep
+venv/
+__pycache__/
+*.pyc
+.env

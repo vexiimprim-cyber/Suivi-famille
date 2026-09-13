@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Résultat — Lip Sync</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main>
+    <h1>Vidéo générée</h1>
+    <video controls autoplay src="{{ video_url }}"></video>
+    <p><a href="{{ video_url }}" download>Télécharger la vidéo</a></p>
+    <p><a href="{{ url_for('index') }}">← Générer une autre vidéo</a></p>
+  </main>
+</body>
+</html>
