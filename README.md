@@ -59,7 +59,23 @@ Options simples, par ordre de facilité :
 Une fois en ligne, remplace `SERVER_URL` dans les scripts clients par ton
 adresse `https://...`.
 
-## 3. Client Android (via Termux)
+## 3. Option la plus simple : un lien à envoyer (aucune installation)
+
+Dans le tableau de bord, clique sur "Lien" à côté du nom de la personne (ou
+copie-le juste après l'avoir créée) : ça te donne une adresse du type
+`https://ton-serveur/suivre/CLE_API`. Envoie ce lien par SMS/WhatsApp — un
+simple clic dessus demande l'autorisation de localisation, puis partage la
+position automatiquement.
+
+⚠️ Limite : ça ne fonctionne que **tant que la page reste ouverte** dans le
+navigateur (premier plan). Si la personne ferme l'onglet ou verrouille
+longtemps son téléphone, le partage s'arrête jusqu'à ce qu'elle rouvre le
+lien — c'est une restriction imposée par les navigateurs mobiles (batterie et
+vie privée), pas quelque chose de contournable côté serveur. Pour un vrai
+suivi continu en arrière-plan sur Android, utilise plutôt Termux (option
+suivante).
+
+## 4. Client Android (via Termux, suivi continu en arrière-plan)
 
 Voir les instructions détaillées en haut de
 [client_android_termux.py](client_android_termux.py). Résumé :
@@ -72,7 +88,7 @@ Voir les instructions détaillées en haut de
 5. Lancer avec `python client_android_termux.py` (et optionnellement
    `Termux:Boot` pour un démarrage automatique au boot du téléphone).
 
-## 4. Client iPhone (via l'app Raccourcis)
+## 5. Client iPhone (via l'app Raccourcis, suivi continu)
 
 iOS ne permet pas de faire tourner du Python en arrière-plan, mais l'app
 **Raccourcis** (Shortcuts) native peut envoyer la position périodiquement :
@@ -95,7 +111,7 @@ C'est moins fréquent et moins fiable qu'Android (limitations d'Apple sur les
 automatisations en tâche de fond), mais suffisant pour un suivi toutes les
 30-60 minutes.
 
-## 5. Sécurité
+## 6. Sécurité
 
 - Change absolument `ADMIN_PASSWORD` et `SECRET_KEY` (valeurs par défaut non
   sécurisées).

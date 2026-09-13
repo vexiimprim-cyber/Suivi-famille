@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Partage de position</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+  body { font-family: system-ui, sans-serif; background:#0f172a; color:#e2e8f0; height:100vh; margin:0;
+         display:flex; align-items:center; justify-content:center; text-align:center; padding: 1.5rem; box-sizing: border-box; }
+  .card { max-width: 380px; }
+  .status { font-size: 3rem; margin-bottom: 1rem; }
+  h1 { font-size: 1.3rem; margin: 0 0 .5rem; }
+  p { color:#94a3b8; font-size: .95rem; line-height:1.4; }
+  .ok { color:#4ade80; }
+  .err { color:#f87171; }
+  #lastUpdate { font-size:.8rem; color:#64748b; margin-top:1rem; }
+  button { margin-top: 1.5rem; padding: .7rem 1.2rem; border-radius: 8px; border: none;
+           background: #2563eb; color: white; font-weight: 600; font-size: .9rem; cursor: pointer; }
+</style>
+</head>
+<body>
+{% if api_key %}
+<div class="card">
+  <div class="status" id="icon">📍</div>
+  <h1 id="title">Activation du partage de position…</h1>
+  <p id="message">Autorise l'accès à la position quand ton téléphone le demande.</p>
+  <div id="lastUpdate"></div>
+</div>
+<script>
+const API_KEY = {{ api_key|tojson }};
+
+const iconEl = document.getElementById('icon');
+const titleEl = document.getElementById('title');
+const messageEl = document.getElementById('message');
+const lastUpdateEl = document.getElementById('lastUpdate');
+
+let lastSentAt = 0;
+const MIN_INTERVAL_MS = 30000;
+
+function setOk() {
+  iconEl.textContent = '✅';
+  titleEl.textContent = 'Position partagée';
+  titleEl.className = 'ok';
+  messageEl.textContent = "Laisse cette page ouverte pour continuer à partager ta position.";
+}
+
+function setError(msg) {
+  iconEl.textContent = '⚠️';
+  titleEl.textContent = 'Partage impossible';
+  titleEl.className = 'err';
+  messageEl.textContent = msg;
+}
+
+async function sendPosition(pos) {
+  const now = Date.now();
+  if (now - lastSentAt < MIN_INTERVAL_MS) return;
+  lastSentAt = now;
+  try {
+    await fetch('/api/ping', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        api_key: API_KEY,
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        accuracy: pos.coords.accuracy
+      })
+    });
+    setOk();
+    lastUpdateEl.textContent = 'Dernier envoi : ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    setError("Connexion au serveur impossible. Vérifie ta connexion internet.");
+  }
+}
+
+if (!('geolocation' in navigator)) {
+  setError("Ton navigateur ne permet pas de partager la position.");
+} else {
+  navigator.geolocation.watchPosition(sendPosition, (err) => {
+    if (err.code === err.PERMISSION_DENIED) {
+      setError("Autorisation refusée. Active la localisation pour ce site dans les réglages du navigateur.");
+    } else {
+      setError("Impossible d'obtenir ta position (" + err.message + ").");
+    }
+  }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
+
+  setInterval(() => {
+    navigator.geolocation.getCurrentPosition(sendPosition, () => {});
+  }, 60000);
+}
+
+if ('wakeLock' in navigator) {
+  navigator.wakeLock.request('screen').catch(() => {});
+}
+</script>
+{% else %}
+<div class="card">
+  <div class="status">❌</div>
+  <h1>Lien invalide</h1>
+  <p>Ce lien de partage n'existe pas ou a été supprimé.</p>
+</div>
+{% endif %}
+</body>
+</html>

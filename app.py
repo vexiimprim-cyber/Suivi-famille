@@ -45,6 +45,14 @@ def dashboard():
     return render_template("dashboard.html")
 
 
+@app.route("/suivre/<api_key>")
+def track_page(api_key):
+    device = db.get_device_by_api_key(api_key)
+    if not device:
+        return render_template("track.html", device_name=None, api_key=None), 404
+    return render_template("track.html", device_name=device["name"], api_key=api_key)
+
+
 # ---------- API consultée par le tableau de bord (protégée par login) ----------
 
 @app.route("/api/devices", methods=["GET"])

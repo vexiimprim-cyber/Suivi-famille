@@ -100,7 +100,7 @@ async function loadDevices(selectId) {
     const row = document.createElement('div');
     row.className = 'device-row';
     row.innerHTML = `<span>${d.name}</span>
-      <button class="secondary" data-action="key" data-id="${d.id}">Clé</button>
+      <button class="secondary" data-action="link" data-id="${d.id}">Lien</button>
       <button class="danger" data-action="del" data-id="${d.id}">Suppr.</button>`;
     list.appendChild(row);
   });
@@ -117,10 +117,16 @@ document.getElementById('devicesList').addEventListener('click', async (e) => {
     await fetch(`/api/devices/${id}`, { method: 'DELETE' });
     await loadDevices();
     if (String(currentDeviceId) === id) { currentDeviceId = null; clearMap(); }
-  } else if (btn.dataset.action === 'key') {
+  } else if (btn.dataset.action === 'link') {
     const res = await fetch(`/api/devices/${id}/key`);
     const data = await res.json();
-    alert('Clé API (à mettre dans le script du téléphone suivi) :\n\n' + data.api_key);
+    const link = `${window.location.origin}/suivre/${data.api_key}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      alert('Lien copié dans le presse-papier, prêt à envoyer :\n\n' + link);
+    } catch (e) {
+      prompt('Copie ce lien à envoyer :', link);
+    }
   }
 });
 
@@ -134,8 +140,9 @@ document.getElementById('addDeviceBtn').addEventListener('click', async () => {
   });
   const data = await res.json();
   if (res.ok) {
+    const link = `${window.location.origin}/suivre/${data.api_key}`;
     document.getElementById('newKeyBox').innerHTML =
-      `<div class="key-box"><b>Clé API pour ${data.name}</b><br>${data.api_key}</div>`;
+      `<div class="key-box"><b>Lien à envoyer à ${data.name}</b><br>${link}</div>`;
     nameInput.value = '';
     const devices = await loadDevices();
     const created = devices.find(d => d.name === data.name);
